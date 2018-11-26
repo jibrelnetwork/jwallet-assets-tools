@@ -10,7 +10,7 @@ from .assets_validator import create_assets_validator
 
 sys.path.insert(0, os.path.dirname(__name__))
 
-logger = logging.getLogger('tools')
+logger = logging.getLogger('jwallet_tools')
 
 
 @click.group()
@@ -36,7 +36,7 @@ def validate(file, node, ignore, fast, loglevel, progress):
     `--ignore approve,name,decimals`. It is also possible to ignore all method
     by symbol with, for ex `GNT.*` or exact method with `GNT.approve`.
 
-    Ignored methods can be also defined in `tools/assets.schema.json` under
+    Ignored methods can be also defined in `jwallet_tools/assets.schema.json` under
     `item.isValidContract.ignore` key.
 
     Use `--fast` to prevent method invocations.
@@ -94,7 +94,7 @@ def _configure_logging(loglevel):
             },
         },
         'loggers': {
-            'tools': {
+            'jwallet_tools': {
                 'level': loglevel,
                 'handlers': ['console'],
             }
