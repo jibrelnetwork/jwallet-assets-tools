@@ -1,4 +1,4 @@
-from ..blockexplorer.blockrange import VariableBlockRange
+from jwallet_tools.blockexplorer.blockrange import VariableBlockRange
 
 
 def test_range():
