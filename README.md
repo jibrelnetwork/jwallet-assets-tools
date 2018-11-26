@@ -10,7 +10,7 @@ Install
 Installing from github:
 
 ```bash
-pip install git+https://github.com/jibrelnetwork/jwallet-assets-tools.git
+pip install -e git+git@github.com:jibrelnetwork/jwallet-assets-tools.git#egg=jwallet-assets-tools
 ```
 
 
