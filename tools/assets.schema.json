@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/schema#",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["name", "symbol", "display"],
+    "isValidContract": {
+      "ignore": [
+        "REP.*",
+
+        "EOS.symbol",
+
+        "MKR.name",
+        "MKR.symbol",
+
+        "ICX.name",
+        "ICX.decimals",
+        "ICX.symbol",
+
+        "GNT.approve",
+        "GNT.transferFrom",
+        "GNT.allowance",
+
+        "KCS.approve",
+        "KCS.transferFrom",
+
+        "LRC.name",
+        "LRC.decimals",
+        "LRC.symbol",
+
+        "DAI.name",
+        "DAI.symbol",
+
+        "BCAP.name",
+        "BCAP.decimals",
+        "BCAP.symbol",
+
+        "SOC.approve",
+        "SOC.transferFrom",
+        "SOC.allowance",
+
+        "ATN.name",
+        "ATN.symbol",
+
+        "EXY.symbol"
+      ]
+    },
+    "properties": {
+      "name": {
+        "type": "string",
+        "minLength": 1
+      },
+      "symbol": {
+        "type": "string",
+        "minLength": 1
+      },
+      "blockchainParams": {
+        "type": "object",
+        "required": ["decimals", "staticGasAmount", "type", "deploymentBlockNumber"],
+        "properties": {
+          "decimals": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "address": {
+            "type": "string",
+            "maxLength": 42,
+            "minLength": 42
+          },
+          "staticGasAmount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "deploymentBlockNumber": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "display": {
+        "type": "object",
+        "required": ["isDefaultForcedDisplay", "digitalAssetsListPriority"],
+        "properties": {
+          "isDefaultForcedDisplay": {
+            "type": "boolean"
+          },
+          "digitalAssetsListPriority": {
+            "type": "integer"
+          }
+        }
+      },
+      "assetPage": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "urls": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["type", "url"],
+              "properties": {
+                "type": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string",
+                  "pattern": "^(https?:\/\/)?([\\da-z\\.-]+)\\.([a-z\\.]{2,6})([\/\\w \\.-]*)*\/?$"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

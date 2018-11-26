@@ -1,0 +1,15 @@
+# JetBrains PyCharm
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# python
+__pycache__
+.coverage
+
+# Jupyter
+*.ipynb
+
+# MacOS
+.DS_Store
