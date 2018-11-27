@@ -33,7 +33,11 @@ def validate(file, node, ignore, fast, loglevel, progress):
     """
     Validate json file with assets.
 
-    Use `--node` to define ethereum node to use to check contracts.
+    Will look at `assets_index.json` to get network list and related nodes to perform validation
+    over.
+
+    Use `--node` to define ethereum node to use to check contracts if you want to validate single
+    file (also you must provide `file` argument).
 
     You can use `--ignore` to ignore some methods. If such methods doesn't exist,
     validation will not fail and warning will be printed to output. For example:
