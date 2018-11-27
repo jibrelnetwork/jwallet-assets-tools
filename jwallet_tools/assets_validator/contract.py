@@ -22,6 +22,9 @@ logger = logging.getLogger(__name__)
 
 NODE_REQUEST_TIMEOUT = 3
 
+# multiplier used to convert max gas used to static gas amount
+STATIC_GAS_FACTOR = 1.25
+
 LAST_HARD_FORK_BLOCK = 4370000
 
 ERC20_ABI = load_json('erc20_abi.json')
@@ -189,7 +192,7 @@ class ContractValidator:
                                  for r, p in per_fork_tdigest.all(self.gas_amount_percentile)]))
 
         max_gas_actual = per_fork_tdigest.max_percentile(self.gas_amount_percentile)
-        if max_gas_actual > expected_max_gas:
+        if max_gas_actual != expected_max_gas:
             yield from self.log.if_ignored(
                 "staticGasAmount",
                 "Expected %i gas but %i actual (P%i)" % (
