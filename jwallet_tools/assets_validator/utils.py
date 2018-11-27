@@ -2,12 +2,17 @@ import os
 import json
 import logging
 from pathlib import Path
+from typing import Dict, List, Tuple
 
+from tdigest import TDigest
 from jsonschema import ValidationError
 from web3 import Web3
 
 
 TOOLS_ROOT = Path(os.path.dirname(__file__)) / '..'
+
+
+logger = logging.getLogger(__name__)
 
 
 def load_json(filename):
@@ -86,3 +91,41 @@ class IgnoreLoggerAdapter(logging.LoggerAdapter):
         ]
 
         return any([v in self.extra['ignore'] for v in variants])
+
+
+class RangedTDigest:
+
+    """Ranged TDigest.
+
+    Store TDigest instance per configured interval. For ex.: with intervals `[10,20]`,
+    two tdigest will be stored: for x<=10, and 20 <= x < 10.
+    """
+
+    by_range = Dict[int, TDigest]
+
+    def __init__(self, ranges: List[int], delta=0.01, k=25):
+        self.ranges = ranges
+        self.by_range = {x: TDigest(delta, k) for x in ranges}
+
+    def percentile(self, range, percentile):
+        return self.by_range[range].percentile(percentile)
+
+    def update(self, range_value: int, value: float):
+        for range_end in self.by_range:
+            if range_end < range_value:
+                break
+        self.by_range[range_end].update(value)
+
+    def max_percentile(self, percentile) -> float:
+        return max(*[x[1] for x in self.all(percentile)])
+
+    def all(self, percentile) -> List[Tuple[int, float]]:
+        result = []
+        for _range, tdigest in self.by_range.items():
+            value = 0
+            if tdigest.n > 0:
+                value = tdigest.percentile(percentile)
+            else:
+                logger.debug("No values for range %i", _range)
+            result.append((_range, value))
+        return result

@@ -111,7 +111,6 @@ class ContractValidator:
             yield from self.validate_static_gas_amount(
                 contract,
                 blockchain_params.get('staticGasAmount'),
-                # TODO: must be fixed somehow in validate_deployment_block
                 from_block=deployment_block
             )
 
@@ -172,36 +171,25 @@ class ContractValidator:
         :param contract: Contract instance to validate
         :param expected_max_gas: expected static gas amount (from source json)
         """
+        from .utils import RangedTDigest
         to_block = self.web3.eth.blockNumber
-        last_fork_tdigest = TDigest()
-        before_last_fork_digest = TDigest()
+        per_fork_tdigest = RangedTDigest([LAST_HARD_FORK_BLOCK, to_block])
 
         topics = construct_event_topic_set(TRANSFER_ABI, dict(to=contract.address))
 
-        for tx in EventReceiptIterator(self.web3, contract.address, from_block, to_block, topics,
-                                       progress=self.progress, progress_title='staticGasAmount'):
-            if tx.blockNumber >= LAST_HARD_FORK_BLOCK:
-                last_fork_tdigest.update(tx.gasUsed)
-            else:
-                before_last_fork_digest.update(tx.gasUsed)
+        receipts = EventReceiptIterator(
+            self.web3, contract.address, from_block, to_block, topics,
+            progress=self.progress, progress_title='staticGasAmount'
+        )
 
-        max_from_fork = 0
-        if last_fork_tdigest.n > 0:
-            max_from_fork = last_fork_tdigest.percentile(self.gas_amount_percentile)
-        else:
-            self.log.debug('No transactions since last hardfork at %i block', LAST_HARD_FORK_BLOCK)
+        for tx in receipts:
+            per_fork_tdigest.update(tx.blockNumber, tx.gasUsed)
 
-        max_before_fork = 0
-        if before_last_fork_digest.n > 0:
-            max_before_fork = before_last_fork_digest.percentile(self.gas_amount_percentile)
-        else:
-            self.log.debug('No transactions before last hardfork at %i block', LAST_HARD_FORK_BLOCK)
+        self.log.info("staticGasAmount (before block): %s",
+                      ", ".join([f"{p} ({r})"
+                                 for r, p in per_fork_tdigest.all(self.gas_amount_percentile)]))
 
-        max_gas_actual = max(max_from_fork, max_before_fork)
-
-        self.log.info("staticGasAmount stats: %i overall, %i before and %i after last fork",
-                      max_gas_actual, max_before_fork, max_from_fork)
-
+        max_gas_actual = per_fork_tdigest.max_percentile(self.gas_amount_percentile)
         if max_gas_actual > expected_max_gas:
             yield from self.log.if_ignored(
                 "staticGasAmount",
