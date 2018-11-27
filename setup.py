@@ -11,6 +11,8 @@ setup(
     description='Jwallet assets tools (validator)',
     packages=[
         'jwallet_tools',
+        'jwallet_tools.assets_validator',
+        'jwallet_tools.blockexplorer',
     ],
     zip_safe=False,
     platforms='any',
