@@ -9,6 +9,8 @@ __pycache__
 .coverage
 *.egg-info
 
+.mypy_cache
+
 # Jupyter
 *.ipynb
 

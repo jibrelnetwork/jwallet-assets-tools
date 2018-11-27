@@ -1,6 +1,5 @@
 import logging
 
-from tdigest import TDigest
 from jsonschema import ValidationError
 
 from web3 import Web3

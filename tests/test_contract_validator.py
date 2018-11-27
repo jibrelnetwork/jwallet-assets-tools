@@ -1,28 +1,17 @@
 from unittest import mock
 import pytest
 
-from web3 import Web3, HTTPProvider
 from web3.datastructures import AttributeDict
 
-from .fixtures import (
+from .conftest import (
     TEST_TOKEN_ADDRESS,
     TEST_TOKEN_GAS,
     TEST_TOKEN_DEPLOYMENT_BLOCK,
     TEST_TOKEN_DECIMALS,
-
-    w3,  # noqa
-    validator,  # noqa
-    contract,  # noqa
 )
 
 
 NODE_URL = "https://main-node.jwallet.network/"
-
-
-TEST_TOKEN_ADDRESS = Web3.toChecksumAddress("0xa15c7ebe1f07caf6bff097d8a589fb8ac49ae5b3")
-TEST_TOKEN_GAS = 39242
-TEST_TOKEN_DEPLOYMENT_BLOCK = 5217268
-TEST_TOKEN_DECIMALS = 18
 
 
 def test_known_gas_amount(validator, contract):

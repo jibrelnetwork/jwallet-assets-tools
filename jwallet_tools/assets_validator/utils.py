@@ -101,7 +101,7 @@ class RangedTDigest:
     two tdigest will be stored: for x<=10, and 20 <= x < 10.
     """
 
-    by_range = Dict[int, TDigest]
+    by_range: Dict[int, TDigest]
 
     def __init__(self, ranges: List[int], delta=0.01, k=25):
         self.ranges = ranges
@@ -113,14 +113,14 @@ class RangedTDigest:
     def update(self, range_value: int, value: float):
         for range_end in self.by_range:
             if range_end < range_value:
+                self.by_range[range_end].update(value)
                 break
-        self.by_range[range_end].update(value)
 
     def max_percentile(self, percentile) -> float:
         return max(*[x[1] for x in self.all(percentile)])
 
     def all(self, percentile) -> List[Tuple[int, float]]:
-        result = []
+        result: List[Tuple[int, float]] = []
         for _range, tdigest in self.by_range.items():
             value = 0
             if tdigest.n > 0:
