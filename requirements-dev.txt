@@ -1,5 +1,10 @@
 -r requirements.txt
 
 pytest
-pylama
+pytest-watch
+pytest-cover
 coverage
+
+pylama
+flake8
+
