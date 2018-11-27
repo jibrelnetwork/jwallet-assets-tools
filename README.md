@@ -36,3 +36,20 @@ Fast validation (must be used as pre-commit hook when contributing to `jwallet-a
 ```bash
 jwallet-assets-tools validate assets.json --node=https://main-node.jwallet.network/ --loglevel=ERROR
 ```
+
+Contributing
+---
+
+Create PR to contribute changes.
+
+Run linters:
+
+```bash
+make lint
+```
+
+Run tests:
+
+```bash
+make test
+```
