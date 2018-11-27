@@ -10,7 +10,11 @@ from .assets_validator import create_assets_validator
 
 sys.path.insert(0, os.path.dirname(__name__))
 
+
 logger = logging.getLogger('jwallet_tools')
+
+
+INDEX_FILENAME = './assets_index.json'
 
 
 @click.group()
@@ -19,7 +23,7 @@ def main():
 
 
 @main.command()
-@click.argument('file', type=click.File('r'))
+@click.argument('file', type=click.File('r'), required=False)
 @click.option('--node', default="https://main-node.jwallet.network/", help="Ethereum node to use to validate contract")  # noqa
 @click.option('--ignore', help="comma separated list of ignored methods (ex: `approve,name`)")
 @click.option('--fast', is_flag=True, help="do not invoke contract method")
@@ -43,31 +47,47 @@ def validate(file, node, ignore, fast, loglevel, progress):
     """
     _configure_logging(loglevel)
 
+    check_list = []
+    if node and file:
+        check_list.append([file, node])
+    else:
+        if not os.path.exists(INDEX_FILENAME):
+            click.echo('[FAIL] no %s found in current directory, '
+                       'and no file and node provided', INDEX_FILENAME)
+            exit(1)
+        with open(INDEX_FILENAME) as fp:
+            assets_index = json.load(fp)
+            for config in assets_index.values():
+                check_list.append([open(config['assets']), config['node']])
+
     if ignore is None:
         ignore = []
     else:
         ignore = [x.strip() for x in ignore.split(',')]
 
-    validator = create_assets_validator(
-        node=node,
-        ignore=ignore,
-        fast=fast,
-        progress=progress
-    )
-
-    data = json.load(file)
-
     error_count = 0
 
-    for error in validator.iter_errors(instance=data):
-        asset_position = error.absolute_path[0]
-        token_name = '%s (%s)' % (
-            data[asset_position].get('name'),
-            data[asset_position].get('symbol')
+    for file, node in check_list:
+        validator = create_assets_validator(
+            node=node,
+            ignore=ignore,
+            fast=fast,
+            progress=progress
         )
-        field = '.'.join([str(x) for x in error.absolute_path][1:])
-        logger.error("[E] %s: %s: %s" % (token_name, field, error.message))
-        error_count += 1
+
+        data = json.load(file)
+
+        for error in validator.iter_errors(instance=data):
+            asset_position = error.absolute_path[0]
+            token_name = '%s (%s)' % (
+                data[asset_position].get('name'),
+                data[asset_position].get('symbol')
+            )
+            field = '.'.join([str(x) for x in error.absolute_path][1:])
+            logger.error("[E] %s: %s: %s" % (token_name, field, error.message))
+            error_count += 1
+
+        file.close()
 
     if not error_count:
         click.echo("[OK] Validation complete.")
