@@ -57,7 +57,7 @@ def validate(file, node, ignore, fast, loglevel, progress):
     else:
         if not os.path.exists(INDEX_FILENAME):
             click.echo('[FAIL] no %s found in current directory, '
-                       'and no file and node provided', INDEX_FILENAME)
+                       'and no file and node provided' % INDEX_FILENAME)
             exit(1)
         with open(INDEX_FILENAME) as fp:
             assets_index = json.load(fp)
