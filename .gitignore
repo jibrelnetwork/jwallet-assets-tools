@@ -12,7 +12,7 @@ __pycache__
 .mypy_cache
 
 # Jupyter
-*.ipynb
+.ipynb_checkpoints
 
 # MacOS
 .DS_Store
