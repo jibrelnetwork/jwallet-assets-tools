@@ -89,6 +89,16 @@
           }
         }
       },
+      "priceFeed": {
+        "type": "object",
+        "required": ["currencyID", "currencyIDType"],
+        "currencyID": {
+          "type": "integer"
+        },
+        "currencyIDType": {
+          "type": "string"
+        }
+      },
       "assetPage": {
         "type": "object",
         "properties": {
