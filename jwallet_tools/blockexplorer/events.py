@@ -8,7 +8,7 @@ import requests
 
 from .blockrange import ThrottledBlockRange
 
-MIN_BATCH_SIZE = 1
+MIN_BATCH_SIZE = 2
 MAX_BATCH_SIZE = 10 ** 6
 
 EXCEPTION_SPEED_FACTOR = 0.1
@@ -84,7 +84,6 @@ class EventIterator:
                 logs = self.web3.eth.getLogs(log_filter)
 
                 result_time = time.time() - start_time
-
                 for event in logs:
                     yield event
 

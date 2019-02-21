@@ -104,6 +104,9 @@ class ThrottledBlockRange(VariableBlockRange):
         if new_batch_size > MAX_BATCH_SIZE:
             new_batch_size = MAX_BATCH_SIZE
 
+        if new_batch_size < 1:
+            new_batch_size = 1
+
         if new_batch_size > self.batch_size:
             logger.debug("[up] batch size to %i (from %i)", new_batch_size, self.batch_size)
         elif new_batch_size < self.batch_size:
