@@ -13,7 +13,7 @@ MAX_BATCH_SIZE = 10 ** 6
 
 EXCEPTION_SPEED_FACTOR = 0.1
 SPEED_CHANGE_FACTOR = 1
-MAX_CHANGE_RATIO = 10
+MAX_CHANGE_RATIO = 2
 
 TARGET_TIME = 2
 
@@ -71,7 +71,7 @@ class EventIterator:
                 break
             try:
                 logger.debug(f"Scan blocks {from_block} - {to_block} "
-                             f"({to_block - from_block} batch size)")
+                             f"({to_block - from_block + 1} batch size)")
 
                 start_time = time.time()
                 log_filter = {

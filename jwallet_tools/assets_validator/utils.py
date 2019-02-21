@@ -111,8 +111,8 @@ class RangedTDigest:
         return self.by_range[range].percentile(percentile)
 
     def update(self, range_value: int, value: float):
-        for range_end in self.by_range:
-            if range_end < range_value:
+        for range_end in sorted(self.by_range):
+            if range_end > range_value:
                 self.by_range[range_end].update(value)
                 break
 
