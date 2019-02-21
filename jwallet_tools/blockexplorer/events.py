@@ -97,8 +97,8 @@ class EventIterator:
                 # handle ValueError: {'code': -32000, 'message': 'leveldb: not found'}
                 logger.exception("Problems with the node (possibly leveldb not found), "
                                  "retry after 10s")
-                throttler.rollback()
                 throttler.set_step(MIN_BATCH_SIZE)
+                throttler.rollback()
                 time.sleep(10)
             except RETRY_EXCEPTIONS as e:
                 batch_size = int(throttler.batch_size * EXCEPTION_SPEED_FACTOR)
