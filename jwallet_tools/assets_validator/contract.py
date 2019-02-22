@@ -1,5 +1,7 @@
 import logging
 
+import requests
+
 from jsonschema import ValidationError
 
 from web3 import Web3
@@ -64,6 +66,10 @@ class ContractValidator:
             'timeout': NODE_REQUEST_TIMEOUT
         }))
 
+        self._cmc_assets = {}
+
+        self.load_coinmarketcap_assets()
+
     def __call__(self, validator, value, instance, schema):
         """Validate whole contract consistency.
 
@@ -93,6 +99,8 @@ class ContractValidator:
 
         address = normalize_address(address)
 
+        yield from self.compare_with_coinmarketcap(instance['symbol'], address)
+
         if not self.fast:
             contract = self.web3.eth.contract(address, abi=ERC20_ABI)
             code = self.web3.eth.getCode(address)
@@ -112,6 +120,40 @@ class ContractValidator:
                 blockchain_params.get('staticGasAmount'),
                 from_block=deployment_block
             )
+
+    def compare_with_coinmarketcap(self, symbol, address):
+        cmc_asset = self.get_coinmarketcap_asset(symbol)
+
+        if not cmc_asset:
+            yield from self.log.if_ignored(
+                'symbol',
+                f"No {symbol} symbol found in coinmarketcap mapping"
+            )
+        elif 'platform' in cmc_asset and cmc_asset[
+            'platform'] and normalize_address(
+            cmc_asset['platform']['token_address']) != address:
+            platform_info = cmc_asset.get('platform')
+            if platform_info:
+                if platform_info['symbol'] != 'ETH':
+                    yield from self.log.if_ignored(
+                        'platform',
+                        "Symbol %s expected to be on ETH blockchain but on %s "
+                        "instead" % (
+                        symbol, platform_info['symbol'])
+                    )
+                cmc_address = normalize_address(
+                    cmc_asset['platform']['token_address'])
+                if cmc_address != address:
+                    yield from self.log.if_ignored(
+                        'address',
+                        f"Contract address {address} differs from coinmarketcap one:"
+                        f"{cmc_asset['platform']['token_address']}"
+                    )
+            else:
+                yield from self.log.if_ignored(
+                    'platform',
+                    'No platform info for %s symbol' % symbol
+                )
 
     def validate_methods(self, contract, code):
         """Validate contract ERC20 methods.
@@ -209,3 +251,15 @@ class ContractValidator:
         if not signature_exist(code, signature):
             msg = "signature %s not found" % signature
             yield from self.log.if_ignored(method_name, msg)
+
+    def load_coinmarketcap_assets(self):
+        resp = requests.get(
+            "https://pro-api.coinmarketcap.com/v1/cryptocurrency/map",
+            headers={
+                'X-CMC_PRO_API_KEY': 'd5aabba1-39a5-466a-87cd-913a4911df5f'
+            }
+        )
+        self._cmc_assets = {item['symbol']: item for item in resp.json()['data']}
+
+    def get_coinmarketcap_asset(self, symbol):
+        return self._cmc_assets.get(symbol)
