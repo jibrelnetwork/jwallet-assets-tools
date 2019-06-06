@@ -174,7 +174,8 @@ class ContractValidator:
         to_block = self.web3.eth.blockNumber
         per_fork_tdigest = RangedTDigest([LAST_HARD_FORK_BLOCK, to_block])
 
-        topics = construct_event_topic_set(TRANSFER_ABI)
+        topics = construct_event_topic_set(TRANSFER_ABI,
+                                           dict(to=contract.address))
 
         receipts = EventReceiptIterator(
             self.web3, contract.address, from_block, to_block, topics,
