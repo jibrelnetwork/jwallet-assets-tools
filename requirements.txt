@@ -4,3 +4,4 @@ jsonschema==2.6.0
 tdigest==0.5.2.1
 requests==2.20.1
 tqdm==4.28.1
+confluent-kafka==1.1.0

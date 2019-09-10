@@ -1,6 +1,8 @@
 import os
 import json
 import logging
+
+from logging.handlers import BufferingHandler
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -129,3 +131,12 @@ class RangedTDigest:
                 logger.debug("No values for range %i", _range)
             result.append((_range, value))
         return result
+
+
+class ErrorBufferingHandler(BufferingHandler):
+    """
+    Handler that collects only errors
+    """
+    def emit(self, record):
+        if record.levelno == logging.ERROR:
+            super().emit(record)

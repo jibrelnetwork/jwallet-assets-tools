@@ -1,9 +1,8 @@
 import logging
-
 import requests
 
 from jsonschema import ValidationError
-
+from typing import Dict
 from web3 import Web3
 from web3.exceptions import BadFunctionCallOutput
 from web3.utils.events import construct_event_topic_set
@@ -15,7 +14,8 @@ from .utils import (
     normalize_address,
     make_signature,
     signature_exist,
-    load_json
+    load_json,
+    ErrorBufferingHandler,
 )
 from ._http_provider import CustomHTTPProvider
 
@@ -31,20 +31,10 @@ ERC20_ABI = load_json('erc20_abi.json')
 TRANSFER_ABI = list(filter(lambda x: x.get('name') == 'Transfer', ERC20_ABI))[0]
 
 
-class ContractValidator:
-
+class BaseValidator:
     """
-    ERC20 contract validator for jsonschema.
-
-    Check if:
-
-    - contract exist and not empty
-    - contract has ERC20 methods and signature matched
-    - decimals stored in json equals to actual contract decimals
-
-    Also calculate and check `staticGasAmount` if `fast is True`.
+    Common methods for ERC20 contract validation
     """
-
     gas_amount_percentile = 100
 
     def __init__(self, node, ignore=None, fast=False, progress=False):
@@ -70,56 +60,8 @@ class ContractValidator:
 
         self.load_coinmarketcap_assets()
 
-    def __call__(self, validator, value, instance, schema):
-        """Validate whole contract consistency.
-
-        :param value: validator config from schema
-        :param instance: contract dict from json
-        """
-        blockchain_params = instance.get('blockchainParams', {})
-        if blockchain_params.get('type') != 'erc-20':
-            return
-
-        self.log.extra = {
-            'token': instance,
-            'ignore': self.ignore.union(value.get('ignore', set()))
-        }
-
-        self.log.info("%s validation", instance.get('symbol'))
-
-        address = blockchain_params.get('address')
-
-        if not address:
-            yield ValidationError('`address` is required')
-            return
-
-        if not self.web3.isAddress(address):
-            yield ValidationError("%s is not an address" % address)
-            return
-
-        address = normalize_address(address)
-
-        yield from self.compare_with_coinmarketcap(instance['symbol'], address)
-
-        if not self.fast:
-            contract = self.web3.eth.contract(address, abi=ERC20_ABI)
-            code = self.web3.eth.getCode(address)
-            if not code:
-                yield from self.log.if_ignored("code", "Contract code is empty")
-                return
-
-            yield from self.validate_methods(contract, code)
-
-            yield from self.validate_decimals(contract, blockchain_params.get('decimals'))
-
-            deployment_block = blockchain_params.get('deploymentBlockNumber', 0)
-
-            logger.debug("Validate static gas amount from %i block", deployment_block)
-            yield from self.validate_static_gas_amount(
-                contract,
-                blockchain_params.get('staticGasAmount'),
-                from_block=deployment_block
-            )
+    def _get_contract(self, address):
+        return self.web3.eth.contract(address, abi=ERC20_ABI)
 
     def compare_with_coinmarketcap(self, symbol, address):
         cmc_asset = self.get_coinmarketcap_asset(symbol)
@@ -204,13 +146,13 @@ class ContractValidator:
         except BadFunctionCallOutput as e:
             yield from self.log.if_ignored('decimals', str(e))
 
-    def validate_static_gas_amount(self, contract, expected_max_gas, from_block):
-        """Validate gas amount.
+    def _compute_actual_gas(self, contract, from_block):
+        """Compute gas amount.
 
         Iterate over contract TXs using EventReceiptIterator.
 
-        :param contract: Contract instance to validate
-        :param expected_max_gas: expected static gas amount (from source json)
+        :param contract: Contract instance to use
+        :param from_block: block number to start from
         """
         from .utils import RangedTDigest
         to_block = self.web3.eth.blockNumber
@@ -232,6 +174,14 @@ class ContractValidator:
                                  for r, p in per_fork_tdigest.all(self.gas_amount_percentile)]))
 
         max_gas_actual = per_fork_tdigest.max_percentile(self.gas_amount_percentile)
+        return max_gas_actual
+
+    def validate_static_gas_amount(self, contract, expected_max_gas, from_block):
+        """Validate gas amount for contract
+        :param contract: Contract instance to validate
+        :param expected_max_gas: expected static gas amount (from source json)
+        """
+        max_gas_actual = self._compute_actual_gas(contract, from_block)
         if max_gas_actual > expected_max_gas:
             yield from self.log.if_ignored(
                 "staticGasAmount",
@@ -264,3 +214,105 @@ class ContractValidator:
 
     def get_coinmarketcap_asset(self, symbol):
         return self._cmc_assets.get(symbol)
+
+
+class ContractValidator(BaseValidator):
+    """
+    ERC20 contract validator for jsonschema.
+
+    Check if:
+
+    - contract exist and not empty
+    - contract has ERC20 methods and signature matched
+    - decimals stored in json equals to actual contract decimals
+
+    Also calculate and check `staticGasAmount` if `fast is True`.
+    """
+
+    def __call__(self, validator, value, instance, schema):
+        """Validate whole contract consistency.
+
+        :param value: validator config from schema
+        :param instance: contract dict from json
+        """
+        blockchain_params = instance.get('blockchainParams', {})
+        if blockchain_params.get('type') != 'erc-20':
+            return
+
+        self.log.extra = {
+            'token': instance,
+            'ignore': self.ignore.union(value.get('ignore', set()))
+        }
+
+        self.log.info("%s validation", instance.get('symbol'))
+
+        address = blockchain_params.get('address')
+
+        if not address:
+            yield ValidationError('`address` is required')
+            return
+
+        if not self.web3.isAddress(address):
+            yield ValidationError("%s is not an address" % address)
+            return
+
+        address = normalize_address(address)
+
+        yield from self.compare_with_coinmarketcap(instance['symbol'], address)
+
+        if not self.fast:
+            contract = self._get_contract(address)
+            code = self.web3.eth.getCode(address)
+            if not code:
+                yield from self.log.if_ignored("code", "Contract code is empty")
+                return
+
+            yield from self.validate_methods(contract, code)
+
+            yield from self.validate_decimals(contract, blockchain_params.get('decimals'))
+
+            deployment_block = blockchain_params.get('deploymentBlockNumber', 0)
+
+            logger.debug("Validate static gas amount from %i block", deployment_block)
+            yield from self.validate_static_gas_amount(
+                contract,
+                blockchain_params.get('staticGasAmount'),
+                from_block=deployment_block
+            )
+
+
+class GasValidator(BaseValidator):
+    def __init__(self, node, ignore=None, fast=False, progress=False):
+        super().__init__(node, ignore, fast, progress)
+        self.buffer_handler = ErrorBufferingHandler(10)
+        logger.addHandler(self.buffer_handler)
+
+    def __call__(self, data: Dict) -> bool:
+        """
+        Is gas amount enough
+        :param data: contract dict from json
+        """
+        if data.get('address') is None:
+            logger.error('Address not set')
+            result = False
+        elif data.get('staticGasAmount') is None:
+            logger.error('No staticGasAmount value to validate')
+            result = False
+        else:
+            address = normalize_address(data.get('address'))
+            static_gas_amount = data['staticGasAmount']
+            deployment_block = data.get('deploymentBlockNumber', 0)
+
+            contract = self._get_contract(address)
+            max_gas_actual = self._compute_actual_gas(
+                contract=contract,
+                from_block=deployment_block,
+            )
+            result = max_gas_actual <= static_gas_amount
+        return result
+
+    def get_message(self):
+        result = ''
+        if self.buffer_handler.buffer:
+            result = self.buffer_handler.buffer[-1].msg
+        return result

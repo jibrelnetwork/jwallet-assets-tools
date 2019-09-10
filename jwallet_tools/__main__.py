@@ -6,6 +6,7 @@ import json
 import click
 
 from .assets_validator import create_assets_validator
+from .validation_service.classes import KafkaAssetValidator
 
 
 sys.path.insert(0, os.path.dirname(__name__))
@@ -99,6 +100,17 @@ def validate(file, node, ignore, fast, loglevel, progress):
 
     click.echo("[FAIL] validation failed, see details above.")
     exit(1)
+
+
+@main.command(name='request')
+@click.option('--host', default="0.0.0.0", help="Kafka host")
+@click.option('--port', default="9092", help="Kafka port")
+def validate_messages(host, port):
+    """
+    Process validation requests from kafka
+    """
+    obj = KafkaAssetValidator(host, port)
+    obj.process_message()
 
 
 def _configure_logging(loglevel):
