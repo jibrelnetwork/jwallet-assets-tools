@@ -224,19 +224,24 @@ class ContractValidator:
             progress=self.progress, progress_title='staticGasAmount'
         )
 
+        n = 0  # number or receipts
         for tx in receipts:
             per_fork_tdigest.update(tx.blockNumber, tx.gasUsed)
+            n += 1
 
         self.log.info("staticGasAmount (before block): %s",
                       ", ".join([f"{p} ({r})"
                                  for r, p in per_fork_tdigest.all(self.gas_amount_percentile)]))
 
         max_gas_actual = per_fork_tdigest.max_percentile(self.gas_amount_percentile)
-        if max_gas_actual > expected_max_gas:
+
+        gas_per_receipt = max_gas_actual / n
+
+        if gas_per_receipt > expected_max_gas:
             yield from self.log.if_ignored(
                 "staticGasAmount",
                 "Expected %i gas but %i actual (P%i)" % (
-                    expected_max_gas, max_gas_actual,
+                    expected_max_gas, gas_per_receipt,
                     self.gas_amount_percentile
                 )
             )
