@@ -1,5 +1,6 @@
 import logging
-
+from collections import defaultdict
+from tdigest import TDigest
 import requests
 
 from jsonschema import ValidationError
@@ -212,9 +213,7 @@ class ContractValidator:
         :param contract: Contract instance to validate
         :param expected_max_gas: expected static gas amount (from source json)
         """
-        from .utils import RangedTDigest
         to_block = self.web3.eth.blockNumber
-        per_fork_tdigest = RangedTDigest([LAST_HARD_FORK_BLOCK, to_block])
 
         topics = construct_event_topic_set(TRANSFER_ABI,
                                            dict(to=contract.address))
@@ -224,24 +223,24 @@ class ContractValidator:
             progress=self.progress, progress_title='staticGasAmount'
         )
 
-        n = 0  # number or receipts
+        numbers = defaultdict(int)
+        gases = defaultdict(lambda: TDigest(0.01, 25))
         for tx in receipts:
-            per_fork_tdigest.update(tx.blockNumber, tx.gasUsed)
-            n += 1
+            numbers[tx.transactionIndex] += 1
+            gases[tx.transactionIndex].update(tx.gasUsed)
 
-        self.log.info("staticGasAmount (before block): %s",
-                      ", ".join([f"{p} ({r})"
-                                 for r, p in per_fork_tdigest.all(self.gas_amount_percentile)]))
+        gas_per_tx = {}
+        for txIndex in numbers:
+            gas_per_tx[txIndex] = gases[txIndex].percentile(100) / numbers[txIndex]
+        result = 0
+        if gas_per_tx:
+            result = max(gas_per_tx.values())
 
-        max_gas_actual = per_fork_tdigest.max_percentile(self.gas_amount_percentile)
-
-        gas_per_receipt = max_gas_actual / n
-
-        if gas_per_receipt > expected_max_gas:
+        if result > expected_max_gas:
             yield from self.log.if_ignored(
                 "staticGasAmount",
                 "Expected %i gas but %i actual (P%i)" % (
-                    expected_max_gas, gas_per_receipt,
+                    expected_max_gas, result,
                     self.gas_amount_percentile
                 )
             )
