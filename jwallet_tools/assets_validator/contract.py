@@ -1,10 +1,12 @@
+import functools
 import logging
-from collections import defaultdict
-from tdigest import TDigest
 import requests
 
+from collections import defaultdict
+from datetime import datetime, timedelta
+from decimal import Decimal
 from jsonschema import ValidationError
-
+from typing import Dict
 from web3 import Web3
 from web3.exceptions import BadFunctionCallOutput
 from web3.utils.events import construct_event_topic_set
@@ -16,8 +18,8 @@ from .utils import (
     normalize_address,
     make_signature,
     signature_exist,
-    load_json
-)
+    load_json,
+    get_block_by_date)
 from ._http_provider import CustomHTTPProvider
 
 
@@ -26,6 +28,8 @@ logger = logging.getLogger(__name__)
 NODE_REQUEST_TIMEOUT = 3
 
 LAST_HARD_FORK_BLOCK = 4370000
+
+MONTHS = 6
 
 ERC20_ABI = load_json('erc20_abi.json')
 
@@ -215,35 +219,55 @@ class ContractValidator:
         """
         to_block = self.web3.eth.blockNumber
 
+        n_month_block = self.get_block_number_n_months_ago(MONTHS)
+        tmp_block = max((from_block, n_month_block))
+        gases = self.get_transactions_and_their_gases(contract, tmp_block, to_block)
+
+        # if not gases and from_block < n_month_block:
+        #     print(1111)
+        #     self.get_transactions_and_their_gases(contract, from_block, n_month_block)
+
+        tx_hash = max_gas = 0
+        if gases:
+            tx_hash, max_gas = sorted(gases.items(), key=lambda x: x[1], reverse=True)[0]
+        
+        if max_gas != expected_max_gas:
+            self.log.info(f'calculated: {max_gas} expected: {expected_max_gas}')
+
+        if max_gas > expected_max_gas:
+            yield from self.log.if_ignored(
+                "staticGasAmount",
+                "Expected %i gas but %i actual (P%i). Transaction hash: %s" % (
+                    expected_max_gas,
+                    max_gas,
+                    self.gas_amount_percentile,
+                    tx_hash
+                )
+            )
+
+    def get_transactions_and_their_gases(self, contract, from_block, to_block) -> Dict[str, int]:
         topics = construct_event_topic_set(TRANSFER_ABI,
                                            dict(to=contract.address))
-
         receipts = EventReceiptIterator(
             self.web3, contract.address, from_block, to_block, topics,
             progress=self.progress, progress_title='staticGasAmount'
         )
+        transfer_event = contract.events.Transfer()
+        gases = defaultdict(Decimal)
+        for event_details in receipts:
+            receipt = event_details.receipt
+            tx = event_details.transaction
+            event_logs = transfer_event.processReceipt(receipt)
 
-        numbers = defaultdict(int)
-        gases = defaultdict(lambda: TDigest(0.01, 25))
-        for tx in receipts:
-            numbers[tx.transactionIndex] += 1
-            gases[tx.transactionIndex].update(tx.gasUsed)
+            if len(event_logs) > 1:
+                continue
 
-        gas_per_tx = {}
-        for txIndex in numbers:
-            gas_per_tx[txIndex] = gases[txIndex].percentile(100) / numbers[txIndex]
-        result = 0
-        if gas_per_tx:
-            result = max(gas_per_tx.values())
-
-        if result > expected_max_gas:
-            yield from self.log.if_ignored(
-                "staticGasAmount",
-                "Expected %i gas but %i actual (P%i)" % (
-                    expected_max_gas, result,
-                    self.gas_amount_percentile
-                )
-            )
+            if event_logs[0].args['from'].lower() != tx['from'].lower():
+                print('he he 2')
+                continue
+            tx_hash = tx.hash.hex()
+            gases[tx_hash] = receipt.gasUsed
+        return gases
 
     def validate_signature(self, code, method_name, inputs):
         """Validate contract ERC20 method signature.
@@ -256,6 +280,12 @@ class ContractValidator:
         if not signature_exist(code, signature):
             msg = "signature %s not found" % signature
             yield from self.log.if_ignored(method_name, msg)
+
+    @functools.lru_cache()
+    def get_block_number_n_months_ago(self, n):
+        target_date = datetime.now() - timedelta(days=(365 / 12 * n))
+        block = get_block_by_date(self.web3, target_date)
+        return block['number']
 
     def load_coinmarketcap_assets(self):
         resp = requests.get(
