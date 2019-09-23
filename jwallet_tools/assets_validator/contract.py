@@ -2,11 +2,8 @@ import functools
 import logging
 import requests
 
-from collections import defaultdict
 from datetime import datetime, timedelta
-from decimal import Decimal
 from jsonschema import ValidationError
-from typing import Dict
 from web3 import Web3
 from web3.exceptions import BadFunctionCallOutput
 from web3.utils.events import construct_event_topic_set
@@ -220,14 +217,30 @@ class ContractValidator:
         to_block = self.web3.eth.blockNumber
 
         n_month_block = self.get_block_number_n_months_ago(MONTHS)
-        tmp_block = max((from_block, n_month_block))
-        gases = self.get_transactions_and_their_gases(contract, tmp_block, to_block)
+        from_block = max((from_block, n_month_block))
+        topics = construct_event_topic_set(TRANSFER_ABI,
+                                           dict(to=contract.address))
+        receipts = EventReceiptIterator(
+            self.web3, contract.address, from_block, to_block, topics,
+            progress=self.progress, progress_title='staticGasAmount'
+        )
+        transfer_event = contract.events.Transfer()
+        gases = {}
+        for event_details in receipts:
+            receipt = event_details.receipt
+            tx = event_details.transaction
+            event_logs = transfer_event.processReceipt(receipt)
 
-        # if not gases and from_block < n_month_block:
-        #     print(1111)
-        #     self.get_transactions_and_their_gases(contract, from_block, n_month_block)
+            if len(event_logs) != 1:
+                continue
+            if event_logs[0].args['from'].lower() != tx['from'].lower():
+                continue
 
-        tx_hash = max_gas = 0
+            tx_hash = tx.hash.hex()
+            gases[tx_hash] = receipt.gasUsed
+
+        tx_hash = None
+        max_gas = 0
         if gases:
             tx_hash, max_gas = sorted(gases.items(), key=lambda x: x[1], reverse=True)[0]
         
@@ -244,30 +257,6 @@ class ContractValidator:
                     tx_hash
                 )
             )
-
-    def get_transactions_and_their_gases(self, contract, from_block, to_block) -> Dict[str, int]:
-        topics = construct_event_topic_set(TRANSFER_ABI,
-                                           dict(to=contract.address))
-        receipts = EventReceiptIterator(
-            self.web3, contract.address, from_block, to_block, topics,
-            progress=self.progress, progress_title='staticGasAmount'
-        )
-        transfer_event = contract.events.Transfer()
-        gases = defaultdict(Decimal)
-        for event_details in receipts:
-            receipt = event_details.receipt
-            tx = event_details.transaction
-            event_logs = transfer_event.processReceipt(receipt)
-
-            if len(event_logs) > 1:
-                continue
-
-            if event_logs[0].args['from'].lower() != tx['from'].lower():
-                print('he he 2')
-                continue
-            tx_hash = tx.hash.hex()
-            gases[tx_hash] = receipt.gasUsed
-        return gases
 
     def validate_signature(self, code, method_name, inputs):
         """Validate contract ERC20 method signature.

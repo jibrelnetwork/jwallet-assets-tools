@@ -132,6 +132,7 @@ class RangedTDigest:
 
 
 def get_block_by_date(web3, target_date):
+    """ Search for any block on given date """
     average_block_time = 17 * 1.5
 
     target_timestamp = int(target_date.timestamp())
@@ -139,12 +140,8 @@ def get_block_by_date(web3, target_date):
     block_number = block['number']
     delta = -1
     while delta != 0:
-        diff = target_timestamp - block['timestamp']
-
-        delta = int(diff / average_block_time)
-
+        delta = int((target_timestamp - block['timestamp']) / average_block_time)
         block_number += delta
-
         block = web3.eth.getBlock(block_number)
     return block
 
