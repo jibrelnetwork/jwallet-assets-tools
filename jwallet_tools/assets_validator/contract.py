@@ -243,9 +243,6 @@ class ContractValidator:
         max_gas = 0
         if gases:
             tx_hash, max_gas = sorted(gases.items(), key=lambda x: x[1], reverse=True)[0]
-        
-        if max_gas != expected_max_gas:
-            self.log.info(f'calculated: {max_gas} expected: {expected_max_gas}')
 
         if max_gas > expected_max_gas:
             yield from self.log.if_ignored(
