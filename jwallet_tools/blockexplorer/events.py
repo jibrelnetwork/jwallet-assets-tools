@@ -4,9 +4,7 @@ import time
 import tqdm
 import urllib3
 
-from typing import NamedTuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from web3.datastructures import AttributeDict
 
 from .blockrange import ThrottledBlockRange
 
@@ -26,13 +24,6 @@ RETRY_EXCEPTIONS = (
 
 
 logger = logging.getLogger(__name__)
-
-
-EventReceiptDetails = NamedTuple(
-    'EventReceiptDetails',
-    receipt=AttributeDict,
-    transaction=AttributeDict,
-)
 
 
 class EventIterator:
@@ -155,6 +146,4 @@ class EventReceiptIterator(EventIterator):
     def get_details(self, item):
         hash = item.get('transactionHash')
         receipt = self.web3.eth.getTransactionReceipt(hash)
-        transaction = self.web3.eth.getTransaction(hash)
-        details = EventReceiptDetails(receipt=receipt, transaction=transaction)
-        return details
+        return receipt

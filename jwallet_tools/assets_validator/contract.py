@@ -22,7 +22,7 @@ from ._http_provider import CustomHTTPProvider
 
 logger = logging.getLogger(__name__)
 
-NODE_REQUEST_TIMEOUT = 3
+NODE_REQUEST_TIMEOUT = 5
 
 LAST_HARD_FORK_BLOCK = 4370000
 
@@ -218,25 +218,26 @@ class ContractValidator:
 
         n_month_block = self.get_block_number_n_months_ago(MONTHS)
         from_block = max((from_block, n_month_block))
-        topics = construct_event_topic_set(TRANSFER_ABI,
-                                           dict(to=contract.address))
+        topics = construct_event_topic_set(TRANSFER_ABI)
         receipts = EventReceiptIterator(
             self.web3, contract.address, from_block, to_block, topics,
             progress=self.progress, progress_title='staticGasAmount'
         )
         transfer_event = contract.events.Transfer()
         gases = {}
-        for event_details in receipts:
-            receipt = event_details.receipt
-            tx = event_details.transaction
-            event_logs = transfer_event.processReceipt(receipt)
-
+        for receipt in receipts:
+            try:
+                event_logs = transfer_event.processReceipt(receipt)
+            except ValueError:
+                continue
             if len(event_logs) != 1:
                 continue
-            if event_logs[0].args['from'].lower() != tx['from'].lower():
+            if event_logs[0].args['from'].lower() != receipt['from'].lower():
+                continue
+            if not receipt.gasUsed:
                 continue
 
-            tx_hash = tx.hash.hex()
+            tx_hash = receipt.transactionHash.hex()
             gases[tx_hash] = receipt.gasUsed
 
         tx_hash = None
