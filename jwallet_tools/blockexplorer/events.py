@@ -1,11 +1,10 @@
 import logging
-import urllib3
-import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from queue import Queue
-
-import tqdm
 import requests
+import time
+import tqdm
+import urllib3
+
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from .blockrange import ThrottledBlockRange
 
@@ -139,22 +138,12 @@ class EventReceiptIterator(EventIterator):
         Start workers, one reader thread and yield all receipts received from
         responses queue.
         """
-        queue = Queue()
         with ThreadPoolExecutor(max_workers=self.concurrency) as executor:
-            executor.submit(self.writer, super().__iter__(), queue, executor)
-            while True:
-                item = queue.get()
-                if item is None:
-                    # FIXME: ugly way to handle stop iteration
-                    break
-                yield item
-                queue.task_done()
+            pool = {executor.submit(self.get_details, item) for item in super().__iter__()}
+            for future in as_completed(pool):
+                yield future.result()
 
-    def writer(self, iter, queue, executor):
-        for item in iter:
-            executor.submit(self.get_receipt, item.get('transactionHash'), queue)
-        queue.put(None)
-
-    def get_receipt(self, hash, queue):
+    def get_details(self, item):
+        hash = item.get('transactionHash')
         receipt = self.web3.eth.getTransactionReceipt(hash)
-        queue.put(receipt)
+        return receipt

@@ -1,9 +1,9 @@
+import functools
 import logging
-
 import requests
 
+from datetime import datetime, timedelta
 from jsonschema import ValidationError
-
 from web3 import Web3
 from web3.exceptions import BadFunctionCallOutput
 from web3.utils.events import construct_event_topic_set
@@ -15,16 +15,18 @@ from .utils import (
     normalize_address,
     make_signature,
     signature_exist,
-    load_json
-)
+    load_json,
+    get_block_by_date)
 from ._http_provider import CustomHTTPProvider
 
 
 logger = logging.getLogger(__name__)
 
-NODE_REQUEST_TIMEOUT = 3
+NODE_REQUEST_TIMEOUT = 5
 
 LAST_HARD_FORK_BLOCK = 4370000
+
+DAYS = 183
 
 ERC20_ABI = load_json('erc20_abi.json')
 
@@ -212,32 +214,45 @@ class ContractValidator:
         :param contract: Contract instance to validate
         :param expected_max_gas: expected static gas amount (from source json)
         """
-        from .utils import RangedTDigest
         to_block = self.web3.eth.blockNumber
-        per_fork_tdigest = RangedTDigest([LAST_HARD_FORK_BLOCK, to_block])
 
-        topics = construct_event_topic_set(TRANSFER_ABI,
-                                           dict(to=contract.address))
-
+        n_days_old_block = self.get_block_number_n_days_ago(DAYS)
+        from_block = max((from_block, n_days_old_block))
+        topics = construct_event_topic_set(TRANSFER_ABI)
         receipts = EventReceiptIterator(
             self.web3, contract.address, from_block, to_block, topics,
             progress=self.progress, progress_title='staticGasAmount'
         )
+        transfer_event = contract.events.Transfer()
+        gases = {}
+        for receipt in receipts:
+            try:
+                event_logs = transfer_event.processReceipt(receipt)
+            except ValueError:
+                continue
+            if len(event_logs) != 1:
+                continue
+            if event_logs[0].args['from'].lower() != receipt['from'].lower():
+                continue
+            if not receipt.gasUsed:
+                continue
 
-        for tx in receipts:
-            per_fork_tdigest.update(tx.blockNumber, tx.gasUsed)
+            tx_hash = receipt.transactionHash.hex()
+            gases[tx_hash] = receipt.gasUsed
 
-        self.log.info("staticGasAmount (before block): %s",
-                      ", ".join([f"{p} ({r})"
-                                 for r, p in per_fork_tdigest.all(self.gas_amount_percentile)]))
+        tx_hash = None
+        max_gas = 0
+        if gases:
+            tx_hash, max_gas = sorted(gases.items(), key=lambda x: x[1], reverse=True)[0]
 
-        max_gas_actual = per_fork_tdigest.max_percentile(self.gas_amount_percentile)
-        if max_gas_actual > expected_max_gas:
+        if max_gas > expected_max_gas:
             yield from self.log.if_ignored(
                 "staticGasAmount",
-                "Expected %i gas but %i actual (P%i)" % (
-                    expected_max_gas, max_gas_actual,
-                    self.gas_amount_percentile
+                "Expected %i gas but %i actual (P%i). Transaction hash: %s" % (
+                    expected_max_gas,
+                    max_gas,
+                    self.gas_amount_percentile,
+                    tx_hash
                 )
             )
 
@@ -252,6 +267,12 @@ class ContractValidator:
         if not signature_exist(code, signature):
             msg = "signature %s not found" % signature
             yield from self.log.if_ignored(method_name, msg)
+
+    @functools.lru_cache()
+    def get_block_number_n_days_ago(self, n):
+        target_date = datetime.now() - timedelta(days=n)
+        block = get_block_by_date(self.web3, target_date)
+        return block['number']
 
     def load_coinmarketcap_assets(self):
         resp = requests.get(
