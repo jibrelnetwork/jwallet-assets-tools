@@ -27,6 +27,7 @@ NODE_REQUEST_TIMEOUT = 5
 LAST_HARD_FORK_BLOCK = 4370000
 
 DAYS = 183
+LAST_HARD_FORK_BLOCK = 9069000
 
 ERC20_ABI = load_json('erc20_abi.json')
 
@@ -217,7 +218,7 @@ class ContractValidator:
         to_block = self.web3.eth.blockNumber
 
         n_days_old_block = self.get_block_number_n_days_ago(DAYS)
-        from_block = max((from_block, n_days_old_block))
+        from_block = max((from_block, n_days_old_block, LAST_HARD_FORK_BLOCK))
         topics = construct_event_topic_set(TRANSFER_ABI)
         receipts = EventReceiptIterator(
             self.web3, contract.address, from_block, to_block, topics,
@@ -226,6 +227,8 @@ class ContractValidator:
         transfer_event = contract.events.Transfer()
         gases = {}
         for receipt in receipts:
+            if len(receipt['logs']) != 1:
+                continue
             try:
                 event_logs = transfer_event.processReceipt(receipt)
             except ValueError:
