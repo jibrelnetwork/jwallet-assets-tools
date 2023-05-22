@@ -2,5 +2,5 @@ click==7.0
 web3==4.8.1
 jsonschema==2.6.0
 tdigest==0.5.2.1
-requests==2.20.1
+requests==2.31.0
 tqdm==4.28.1
